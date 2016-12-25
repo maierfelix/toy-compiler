@@ -10,6 +10,8 @@ run "node build"
 have fun with "bin/stub"
 ````
 
-Currently missing:
+Todo:
+ - Sandbox types
+ - Type system
  - Precedence based expression parsing
- - Cool 'not-in-js-existing' features and syntax
+ - More compiling targets e.g. java, python, c#
