@@ -18,8 +18,7 @@ try {
   new Function("__imports", "__exports", output)(stdlib, exports);
   exports.compile(input);
 } catch (e) {
-  console.log(e);
-  console.log("Compilation failed!");
+  throw new Error(e);
 }
 
 fs.writeFileSync(stub_path, output, "utf-8");
