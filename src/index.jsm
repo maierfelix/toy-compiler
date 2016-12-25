@@ -1,3 +1,4 @@
+// vim: syntax=javascript
 let idx = 1;
 
 const TT_UNKNOWN = idx++;

@@ -5,7 +5,7 @@ let stdlib = require("./src/stdlib");
 let stub_path = "./bin/stub.js";
 let stub = fs.readFileSync(stub_path, "utf-8");
 
-let input = fs.readFileSync("./src/index.js", "utf-8");
+let input = fs.readFileSync("./src/index.jsm", "utf-8");
 
 console.log("Compiling..");
 
