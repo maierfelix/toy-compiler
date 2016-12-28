@@ -6,10 +6,10 @@ const TT_UNKNOWN = idx++;
 const KK_LET = idx++;
 const KK_CONST = idx++;
 const KK_CLASS = idx++;
+const KK_EXPORT = idx++;
 const KK_FUNCTION = idx++;
 const KK_IF = idx++;
 const KK_ELSE = idx++;
-const KK_NEW = idx++;
 const KK_WHILE = idx++;
 const KK_BREAK = idx++;
 const KK_CONTINUE = idx++;
@@ -54,17 +54,26 @@ const OP_BIN_AND = idx++;
 const OP_ADD_ADD = idx++;
 const OP_SUB_SUB = idx++;
 
+const OP_NEW = idx++;
+
 const TT_NULL = idx++;
 const TT_STRING = idx++;
 const TT_NUMBER = idx++;
 const TT_BOOLEAN = idx++;
 const TT_IDENTIFIER = idx++;
 
-const NN_PROGRAM = idx++;
 const NN_UNKNOWN = idx++;
+const NN_PROGRAM = idx++;
+const NN_IGNORE = idx++;
+const NN_EXPORT = idx++;
+const NN_NEW = idx++;
 const NN_IF = idx++;
 const NN_LET = idx++;
 const NN_CONST = idx++;
+const NN_CLASS = idx++;
+const NN_CLASS_METHOD = idx++;
+const NN_CLASS_PROPERTY = idx++;
+const NN_CLASS_CONSTRUCTOR = idx++;
 const NN_FUNCTION = idx++;
 const NN_UNARY_PREFIX_EXPRESSION = idx++;
 const NN_UNARY_POSTFIX_EXPRESSION = idx++;
@@ -73,6 +82,8 @@ const NN_MEMBER_EXPRESSION = idx++;
 const NN_COMPUTED_MEMBER_EXPRESSION = idx++;
 const NN_OBJECT_EXPRESSION = idx++;
 const NN_OBJECT_PROPERTY = idx++;
+const NN_ARRAY_EXPRESSION = idx++;
+const NN_ARRAY_ELEMENT = idx++;
 const NN_CALL_EXPRESSION = idx++;
 const NN_WHILE = idx++;
 const NN_RETURN = idx++;
@@ -140,6 +151,7 @@ function isBinaryOperator(token) {
 function isUnaryPrefixOperator(token) {
   let kind = token.kind;
   return (
+    kind == OP_NEW ||
     kind == OP_NOT ||
     kind == OP_ADD_ADD ||
     kind == OP_SUB_SUB
@@ -169,9 +181,9 @@ function processToken(tokens, value, line, column) {
   let kind = TT_UNKNOWN;
   // keywords
   if (value == "let") kind = KK_LET;
-  else if (value == "new") kind = KK_NEW;
   else if (value == "const") kind = KK_CONST;
   else if (value == "class") kind = KK_CLASS;
+  else if (value == "export") kind = KK_EXPORT;
   else if (value == "function") kind = KK_FUNCTION;
   else if (value == "if") kind = KK_IF;
   else if (value == "else") kind = KK_ELSE;
@@ -215,6 +227,7 @@ function processToken(tokens, value, line, column) {
   else if (value == "&&") kind = OP_AND;
   else if (value == "++") kind = OP_ADD_ADD;
   else if (value == "--") kind = OP_SUB_SUB;
+  else if (value == "new") kind = OP_NEW;
   else kind = TT_IDENTIFIER;
   let token = createToken(kind, value, line, column-value.length);
   tokens.push(token);

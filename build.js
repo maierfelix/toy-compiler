@@ -1,25 +1,29 @@
-let fs = require("fs");
-
-let stdlib = require("./src/stdlib");
+const fs = require("fs");
+const vm = require('vm');
 
 let stub_path = "./bin/stub.js";
-let stub = fs.readFileSync(stub_path, "utf-8");
+let stub = require(stub_path);
 
 let input = fs.readFileSync("./src/index.jsm", "utf-8");
 
-console.log("Compiling..");
+console.log("Recompiling..");
 
-let output = null;
+let result = null;
 
 try {
-  let exports = {};
-  new Function("__imports", "__exports", stub)(stdlib, exports);
-  output = exports.compile(input);
-  new Function("__imports", "__exports", output)(stdlib, exports);
-  exports.compile(input);
+  let out = stub.compile(input);
+  vm.runInNewContext(out.output, { module:{exports:{}},require:require});
+  if (out.errors.length) {
+    out.errors.map((msg) => {
+      console.error(msg);
+    });
+    return void 0;
+  }
+  result = out.output;
 } catch (e) {
   throw new Error(e);
+  return void 0;
 }
 
-fs.writeFileSync(stub_path, output, "utf-8");
-console.log("Compilation succeeded!");
+fs.writeFileSync(stub_path, result, "utf-8");
+console.log("Successfully recompiled into " + stub_path);

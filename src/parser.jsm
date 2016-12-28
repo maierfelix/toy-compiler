@@ -1,25 +1,51 @@
 let pindex = 0;
+let scope = null;
 let tokens = null;
 let current = null;
+
+function createNode(kind) {
+  let node = new Node(kind);
+  return (node);
+};
+
 function parse(tkns) {
+  let node = {
+    kind: NN_PROGRAM,
+    body: null
+  };
   tokens = tkns;
   pindex = -1;
   next();
-  let body = parseStatementList();
-  return ({
-    kind: NN_PROGRAM,
-    body: body
-  });
+  pushScope(node);
+  scope.parent = null;
+  scope.isGlobal = true;
+  node.body = parseStatementList();
+  popScope();
+  return (node);
+};
+
+function pushScope(node) {
+  let scp = new Scope();
+  scp.node = node;
+  scp.parent = scope;
+  node.context = scp;
+  scope = scp;
+};
+
+function popScope() {
+  if (scope != null) {
+    scope = scope.parent;
+  }
 };
 
 function parseStatementList() {
-  let list = __imports.createArray();
+  let list = [];
   while (true) {
     if (!current) break;
     if (peek(PP_RBRACE)) break;
-    node = parseStatement();
+    let node = parseStatement();
     if (!node) break;
-    if (node.kind != NN_UNKNOWN) list.push(node);
+    if (node.kind != NN_IGNORE) list.push(node);
   };
   return (list);
 };
@@ -30,8 +56,12 @@ function parseStatement() {
     node = parseVariableDeclaration(NN_LET);
   } else if (peek(KK_CONST)) {
     node = parseVariableDeclaration(NN_CONST);
+  } else if (peek(KK_CLASS)) {
+    node = parseClassDeclaration();
+  } else if (peek(KK_EXPORT)) {
+    node = parseExportDeclaration();
   } else if (peek(KK_FUNCTION)) {
-    node = parseFunctionDeclaration();
+    node = parseFunctionDeclaration(true);
   } else if (peek(KK_RETURN)) {
     node = parseReturnStatement();
   } else if (peek(KK_IF)) {
@@ -40,8 +70,9 @@ function parseStatement() {
     node = parseWhileStatement();
   } else if (peek(KK_INCLUDE)) {
     next();
-    __exports.include(current.value);
-    node = { kind: NN_UNKNOWN };
+    include(current.value);
+    // ignore preprocessor nodes
+    node = { kind: NN_IGNORE };
     next();
   } else {
     node = parseExpression();
@@ -53,6 +84,82 @@ function parseStatement() {
   return (node);
 };
 
+function parseExportDeclaration() {
+  expect(KK_EXPORT);
+  let node = {
+    kind: NN_EXPORT,
+    node: parseStatement()
+  };
+  node.node.isExported = true;
+  return (node);
+};
+
+function parseClassDeclaration() {
+  expect(KK_CLASS);
+  let node = {
+    kind: NN_CLASS,
+    id: current.value,
+    body: null
+  };
+  expect(TT_IDENTIFIER);
+  scope.register(node.id, node);
+  expect(PP_LBRACE);
+  pushScope(node);
+  node.body = parseClassBody();
+  popScope();
+  expect(PP_RBRACE);
+  return (node);
+};
+
+function parseClassBody() {
+  let list = [];
+  while (true) {
+    if (!current) break;
+    if (peek(PP_RBRACE)) break;
+    let node = parseClassBodyItem();
+    eat(PP_SEMIC);
+    if (!node) break;
+    list.push(node);
+  };
+  return (list);
+};
+
+function parseClassBodyItem() {
+  let id = current.value;
+  let node = null;
+  expect(TT_IDENTIFIER);
+  // method
+  if (peek(PP_LPAREN)) {
+    let kind = null;
+    // constructor?
+    if (id == "constructor") {
+      kind = NN_CLASS_CONSTRUCTOR;
+    } else {
+      kind = NN_CLASS_METHOD;
+    }
+    node = {
+      id: id,
+      kind: kind,
+      init: null
+    };
+    scope.register(node.id, node);
+    pushScope(node);
+    node.init = parseFunctionDeclaration(false);
+    popScope();
+  }
+  // property
+  else if (eat(PP_COLON)) {
+    node = {
+      id: id,
+      kind: NN_CLASS_PROPERTY,
+      init: parseExpression()
+    };
+    scope.register(node.id, node);
+  }
+  else __imports.error("Unexpected class token " + current.value);
+  return (node);
+};
+
 function parseWhileStatement() {
   let node = {
     kind: NN_WHILE,
@@ -61,6 +168,7 @@ function parseWhileStatement() {
   };
   expect(KK_WHILE);
   node.condition = parseExpression();
+  pushScope(node);
   // braced body
   if (eat(PP_LBRACE)) {
     node.body = parseStatementList();
@@ -69,6 +177,7 @@ function parseWhileStatement() {
   } else {
     node.body = parseExpression();
   }
+  popScope();
   return (node);
 };
 
@@ -81,13 +190,17 @@ function parseIfStatement() {
   };
   // else
   if (!eat(KK_IF)) {
+    pushScope(node);
     node.consequent = parseIfBody();
+    popScope();
     return (node);
   }
   expect(PP_LPAREN);
   node.condition = parseExpression();
   expect(PP_RPAREN);
+  pushScope(node);
   node.consequent = parseIfBody();
+  popScope();
   if (eat(KK_ELSE)) {
     node.alternate = parseIfStatement();
   }
@@ -102,8 +215,7 @@ function parseIfBody() {
     expect(PP_RBRACE);
   // short if
   } else {
-    node = __imports.createArray();
-    node.push(parseExpression());
+    node = [parseExpression()];
     eat(PP_SEMIC);
   }
   return (node);
@@ -118,8 +230,8 @@ function parseReturnStatement() {
   return (node);
 };
 
-function parseFunctionDeclaration() {
-  expect(KK_FUNCTION);
+function parseFunctionDeclaration(strict) {
+  if (strict) expect(KK_FUNCTION);
   let node = {
     kind: NN_FUNCTION,
     id: null,
@@ -128,18 +240,21 @@ function parseFunctionDeclaration() {
   };
   if (peek(TT_IDENTIFIER)) {
     node.id = current.value;
+    scope.register(node.id, node);
     next();
   }
   node.parameter = parseFunctionParameters();
+  pushScope(node);
   if (eat(PP_LBRACE)) {
     node.body = parseStatementList();
     expect(PP_RBRACE);
   }
+  popScope();
   return (node);
 };
 
 function parseFunctionParameters() {
-  let params = __imports.createArray();
+  let params = [];
   expect(PP_LPAREN);
   while (true) {
     if (peek(PP_RPAREN)) break;
@@ -160,6 +275,7 @@ function parseVariableDeclaration(kind) {
     init: null
   };
   next();
+  scope.register(node.id, node);
   expect(OP_ASS);
   node.init = parseExpression();
   return (node);
@@ -196,7 +312,7 @@ function parseCallExpression(id) {
 };
 
 function parseCallParameters() {
-  let params = __imports.createArray();
+  let params = [];
   expect(PP_LPAREN);
   while (true) {
     if (peek(PP_RPAREN)) break;
@@ -227,7 +343,7 @@ function parseContinue() {
 function parseObjectExpression() {
   let node = {
     kind: NN_OBJECT_EXPRESSION,
-    properties: __imports.createArray()
+    properties: []
   };
   expect(PP_LBRACE);
   while (true) {
@@ -238,11 +354,30 @@ function parseObjectExpression() {
       value: null
     };
     expect(PP_COLON);
-    property.value = parseExpression();
+    property.value = parseStatement();
     node.properties.push(property);
     if (!eat(PP_COMMA)) break;
   };
   expect(PP_RBRACE);
+  return (node);
+};
+
+function parseArrayExpression() {
+  expect(PP_LBRACK);
+  let node = {
+    kind: NN_ARRAY_EXPRESSION,
+    elements: []
+  };
+  while (true) {
+    if (peek(PP_RBRACK)) break;
+    let element = {
+      kind: NN_ARRAY_ELEMENT,
+      value: parseExpression()
+    };
+    node.elements.push(element);
+    if (!eat(PP_COMMA)) break;
+  };
+  expect(PP_RBRACK);
   return (node);
 };
 
@@ -253,7 +388,7 @@ function parseUnaryPrefixExpression() {
     value: null
   };
   next();
-  node.value = parseLiteral();
+  node.value = parseExpression();
   return (node);
 };
 
@@ -304,6 +439,9 @@ function parsePrefix() {
   }
   if (peek(PP_LBRACE)) {
     return (parseObjectExpression());
+  }
+  if (peek(PP_LBRACK)) {
+    return (parseArrayExpression());
   }
   if (eat(PP_LPAREN)) {
     let node = parseExpression();
@@ -370,6 +508,11 @@ function peek(kind) {
 function next() {
   pindex++;
   current = tokens[pindex];
+};
+
+function back() {
+  pindex = pindex - 2;
+  next();
 };
 
 function expect(kind) {

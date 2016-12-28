@@ -5,7 +5,7 @@ function scan(str) {
   let column = 0;
   let length = str.length;
 
-  let tokens = __imports.createArray();
+  let tokens = [];
 
   function next() {
     ii++;
@@ -77,12 +77,29 @@ function scan(str) {
       continue;
     }
     if (ch == "/") {
+      // single line
       if (str.charAt(ii + 1) == "/") {
         while (true) {
           if (cc == 10) {
             column = 0;
             line++;
             break;
+          }
+          next();
+          cc = str.charCodeAt(ii);
+        };
+      }
+      // multi line
+      else if (str.charAt(ii + 1) == "*") {
+        while (true) {
+          // handle line breaks, but dont break on them
+          if (cc == 10) {
+            column = 0;
+            line++;
+          }
+          // comment end
+          else if (cc == 42) {
+            if (str.charCodeAt(ii + 1) == 47) break;
           }
           next();
           cc = str.charCodeAt(ii);
