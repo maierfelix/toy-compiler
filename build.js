@@ -12,7 +12,9 @@ let result = null;
 
 try {
   let out = stub.compile(input);
-  vm.runInNewContext(out.output, { module:{exports:{}},require:require});
+  let exports = {};
+  vm.runInNewContext(out.output, {module:{exports:exports},require:require,console:console});
+  out = exports.compile(input);
   if (out.errors.length) {
     out.errors.map((msg) => {
       console.error(msg);
@@ -21,7 +23,7 @@ try {
   }
   result = out.output;
 } catch (e) {
-  throw new Error(e);
+  console.log(e);
   return void 0;
 }
 

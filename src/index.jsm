@@ -1,10 +1,3 @@
-#include "scope.jsm"
-#include "token.jsm"
-#include "scanner.jsm"
-#include "parser.jsm"
-#include "generator.jsm"
-#include "inference.jsm"
-
 let errors = [];
 let __imports = {
   error: function(msg) {
@@ -19,30 +12,25 @@ let __imports = {
   }
 };
 
+#include "scope.jsm"
+#include "token.jsm"
+#include "node.jsm"
+#include "scanner.jsm"
+#include "parser.jsm"
+#include "generator.jsm"
+#include "inference.jsm"
+
 export function compile(str) {
-  write('(function() { "use strict"; \n');
-  let tokens = scan(str);
-  let ast = parse(tokens);
-  let code = generate(ast);
-  code = code + "\n})();"
+  let base = '(function() { "use strict"; \n';
+  let scanner = new Scanner();
+  let tokens = scanner.scan(str);
+  let parser = new Parser();
+  let ast = parser.parse(tokens);
+  let generator = new Generator();
+  let code = generator.generate(ast);
+  code = base + code + "\n})();";
   return ({
     output: code,
     errors: errors
   });
-};
-
-export function include(path) {
-  let str = __imports.readFile(path);
-  let tkns = scan(str);
-  let tmp_pindex = pindex;
-  let tmp_tokens = tokens;
-  let tmp_current = current;
-  let tmp_scope = scope;
-  let ast = parse(tkns);
-  let code = generate(ast);
-  pindex = tmp_pindex;
-  tokens = tmp_tokens;
-  current = tmp_current;
-  scope = tmp_scope;
-  return (code);
 };

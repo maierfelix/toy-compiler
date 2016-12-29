@@ -65,6 +65,7 @@ const TT_IDENTIFIER = idx++;
 const NN_UNKNOWN = idx++;
 const NN_PROGRAM = idx++;
 const NN_IGNORE = idx++;
+const NN_INCLUDE = idx++;
 const NN_EXPORT = idx++;
 const NN_NEW = idx++;
 const NN_IF = idx++;
@@ -91,91 +92,6 @@ const NN_BREAK = idx++;
 const NN_CONTINUE = idx++;
 const NN_LITERAL = idx++;
 const NN_STRING_LITERAL = idx++;
-
-// ## HALP METHODS ##
-
-function isBlank(cc) {
-  return (
-    cc == 9 ||
-    cc == 11 ||
-    cc == 12 ||
-    cc == 32 ||
-    cc == 160
-  );
-};
-
-function isQuote(cc) {
-  return (
-    cc == 39 ||
-    cc == 34
-  );
-};
-
-function isAlpha(cc) {
-  return (
-    cc >= 65 && cc <= 90 ||
-    cc >= 97 && cc <= 122 ||
-    cc == 95 || cc == 35
-  );
-};
-
-function isNumber(cc) {
-  return (
-    cc >= 48 && cc <= 57
-  );
-};
-
-function isBinaryOperator(token) {
-  let kind = token.kind;
-  return (
-    (kind == OP_ASS ||
-    kind == OP_ADD ||
-    kind == OP_SUB ||
-    kind == OP_MUL ||
-    kind == OP_DIV ||
-    kind == OP_OR ||
-    kind == OP_AND ||
-    kind == OP_NOT ||
-    kind == OP_LT ||
-    kind == OP_LTE ||
-    kind == OP_GT ||
-    kind == OP_GTE ||
-    kind == OP_EQUAL ||
-    kind == OP_NEQUAL ||
-    kind == OP_BIN_OR ||
-    kind == OP_BIN_AND) &&
-    !isUnaryPrefixOperator(token)
-  );
-};
-
-function isUnaryPrefixOperator(token) {
-  let kind = token.kind;
-  return (
-    kind == OP_NEW ||
-    kind == OP_NOT ||
-    kind == OP_ADD_ADD ||
-    kind == OP_SUB_SUB
-  );
-};
-
-function isUnaryPostfixOperator(token) {
-  let kind = token.kind;
-  return (
-    kind == OP_ADD_ADD ||
-    kind == OP_SUB_SUB
-  );
-};
-
-function isLiteral(token) {
-  let kind = token.kind;
-  return (
-    kind == TT_NULL ||
-    kind == TT_STRING ||
-    kind == TT_NUMBER ||
-    kind == TT_BOOLEAN ||
-    kind == TT_IDENTIFIER
-  );
-};
 
 function processToken(tokens, value, line, column) {
   let kind = TT_UNKNOWN;

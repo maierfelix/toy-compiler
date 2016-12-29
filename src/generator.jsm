@@ -1,243 +1,256 @@
-let out = "";
-function write(str) {
-  out = out + str;
-};
+class Generator {
+  out: "";
+  write(str) {
+    this.out = this.out + str;
+  }
 
-function generate(node) {
-  generateBody(node.body);
-  return (out);
-};
+  generate(node) {
+    this.generateBody(node.body);
+    return (this.out);
+  }
 
-function generateBody(body) {
-  let ii = 0;
-  while (ii < body.length) {
-    generateNode(body[ii]);
-    ii++;
-    write(";");
-  };
-};
+  generateBody(body) {
+    let ii = 0;
+    while (ii < body.length) {
+      this.generateNode(body[ii]);
+      ii++;
+      this.write(";");
+    };
+  }
 
-function generateArguments(args) {
-  write("(");
-  let ii = 0;
-  while (ii < args.length) {
-    write(args[ii].value);
-    if (ii + 1 < args.length) {
-      write(", ");
+  generateArguments(args) {
+    this.write("(");
+    let ii = 0;
+    while (ii < args.length) {
+      this.write(args[ii].value);
+      if (ii + 1 < args.length) {
+        this.write(", ");
+      }
+      ii++;
+    };
+    this.write(")");
+  }
+
+  generateNodesOfBody(body, kind) {
+    let ii = 0;
+    while (ii < body.length) {
+      if (body[ii].kind == kind) {
+        this.generateNode(body[ii]);
+        this.write(";");
+      }
+      ii++;
+    };
+  }
+
+  generateNode(node) {
+    let kind = node.kind;
+    if (kind == NN_CLASS_PROPERTY) {
+      this.write("this.");
+      this.write(node.id);
+      this.write(" = ");
+      this.generateNode(node.init);
     }
-    ii++;
-  };
-  write(")");
-};
-
-function generateNodesOfBody(body, kind) {
-  let ii = 0;
-  while (ii < body.length) {
-    if (body[ii].kind == kind) {
-      generateNode(body[ii]);
-      write(";");
+    else if (kind == NN_CLASS_METHOD || kind == NN_CLASS_CONSTRUCTOR) {
+      this.write(node.context.parent.node.id);
+      this.write(".prototype.");
+      this.write(node.id);
+      this.write(" = ");
+      this.generateNode(node.init);
     }
-    ii++;
-  };
-};
-
-function generateNode(node) {
-  let kind = node.kind;
-  if (kind == NN_CLASS_PROPERTY) {
-    write("this.");
-    write(node.id);
-    write(" = ");
-    generateNode(node.init);
-  }
-  else if (kind == NN_CLASS_METHOD || kind == NN_CLASS_CONSTRUCTOR) {
-    write(node.context.parent.node.id);
-    write(".prototype.");
-    write(node.id);
-    write(" = ");
-    generateNode(node.init);
-  }
-  else if (kind == NN_FUNCTION) {
-    write("function ");
-    if (node.id) write(node.id);
-    generateArguments(node.parameter);
-    write(" { ");
-    generateBody(node.body);
-    write(" } ");
-  }
-  else if (kind == NN_CLASS) {
-    write("let ");
-    write(node.id);
-    write(" = ");
-    write("(function () { ");
-    write("function ");
-    write(node.id);
-    write("() { ");
-    generateNodesOfBody(node.body, NN_CLASS_PROPERTY);
-    write(" }; ");
-    generateNodesOfBody(node.body, NN_CLASS_METHOD);
-    write("return (");
-    write(node.id);
-    write(");");
-    write(" })() ");
-  }
-  else if (kind == NN_LET) {
-    write("let ");
-    write(node.id);
-    write(" = ");
-    generateNode(node.init);
-  }
-  else if (kind == NN_CONST) {
-    write("const ");
-    write(node.id);
-    write(" = ");
-    generateNode(node.init);
-  }
-  else if (kind == NN_EXPORT) {
-    if (node.node.kind == NN_FUNCTION) {
-      generateNode(node.node);
-      write("module.exports.");
-      write(node.node.id);
-      write(" = ");
-      write(node.node.id);
+    else if (kind == NN_FUNCTION) {
+      this.write("function ");
+      if (node.id) this.write(node.id);
+      this.generateArguments(node.parameter);
+      this.write(" { ");
+      this.generateBody(node.body);
+      this.write(" } ");
     }
-    else if (node.node.kind == NN_LET || node.node.kind == NN_CONST) {
-      write("module.exports.");
-      write(node.node.id);
-      write(" = ");
-      generateNode(node.node.init);
+    else if (kind == NN_CLASS) {
+      this.write("let ");
+      this.write(node.id);
+      this.write(" = ");
+      this.write("(function () { ");
+      this.write("function ");
+      this.write(node.id);
+      if (node.ctor != null) {
+        this.generateArguments(node.ctor.init.parameter);
+        this.write(" { ");
+        this.generateBody(node.ctor.init.body);
+        this.write(" } ");
+      } else {
+        this.write("() { ");
+        this.generateNodesOfBody(node.body, NN_CLASS_PROPERTY);
+        this.write(" }; ");
+      }
+      this.generateNodesOfBody(node.body, NN_CLASS_METHOD);
+      this.write("return (");
+      this.write(node.id);
+      this.write(");");
+      this.write(" })() ");
     }
-    else if (node.node.kind == NN_LITERAL) {
-      write("module.exports.");
-      write(node.node.value);
-      write(" = ");
-      generateNode(node.node);
+    else if (kind == NN_LET) {
+      this.write("let ");
+      this.write(node.id);
+      this.write(" = ");
+      this.generateNode(node.init);
+    }
+    else if (kind == NN_CONST) {
+      this.write("const ");
+      this.write(node.id);
+      this.write(" = ");
+      this.generateNode(node.init);
+    }
+    else if (kind == NN_EXPORT) {
+      if (node.node.kind == NN_FUNCTION) {
+        this.generateNode(node.node);
+        this.write("module.exports.");
+        this.write(node.node.id);
+        this.write(" = ");
+        this.write(node.node.id);
+      }
+      else if (node.node.kind == NN_LET || node.node.kind == NN_CONST) {
+        this.write("module.exports.");
+        this.write(node.node.id);
+        this.write(" = ");
+        this.generateNode(node.node.init);
+      }
+      else if (node.node.kind == NN_LITERAL) {
+        this.write("module.exports.");
+        this.write(node.node.value);
+        this.write(" = ");
+        this.generateNode(node.node);
+      }
+      else {
+        __imports.error("Cannot export " + node.node.kind);
+      }
+    }
+    else if (kind == NN_IF) {
+      if (node.condition) {
+        this.write("if (");
+        this.generateNode(node.condition);
+        this.write(")");
+      }
+      this.write(" { ");
+      this.generateBody(node.consequent);
+      this.write(" } ");
+      if (node.alternate) {
+        this.write("else ");
+        this.generateNode(node.alternate);
+      }
+    }
+    else if (kind == NN_RETURN) {
+      this.write("return (");
+      this.generateNode(node.argument);
+      this.write(")");
+    }
+    else if (kind == NN_WHILE) {
+      this.write("while ");
+      this.write("(");
+      this.generateNode(node.condition);
+      this.write(")");
+      this.write(" {");
+      this.generateBody(node.body);
+      this.write(" } ");
+    }
+    else if (kind == NN_BREAK) {
+      this.write("break");
+      this.write("");
+    }
+    else if (kind == NN_CONTINUE) {
+      this.write("continue");
+      this.write("");
+    }
+    else if (kind == NN_CALL_EXPRESSION) {
+      this.generateNode(node.callee);
+      this.write("(");
+      let ii = 0;
+      while (ii < node.parameter.length) {
+        this.generateNode(node.parameter[ii]);
+        if (ii + 1 < node.parameter.length) {
+          this.write(", ");
+        }
+        ii++;
+      };
+      this.write(")");
+    }
+    else if (kind == NN_BINARY_EXPRESSION) {
+      this.generateNode(node.left);
+      if (node.operator == "==") {
+        this.write(" === ");
+      }
+      else if (node.operator == "!=") {
+        this.write(" !== ");
+      }
+      else {
+        this.write(node.operator);
+      }
+      this.generateNode(node.right);
+    }
+    else if (kind == NN_MEMBER_EXPRESSION) {
+      this.generateNode(node.parent);
+      this.write(".");
+      this.generateNode(node.member);
+    }
+    else if (kind == NN_COMPUTED_MEMBER_EXPRESSION) {
+      this.generateNode(node.parent);
+      this.write("[");
+      this.generateNode(node.member);
+      this.write("]");
+    }
+    else if (kind == NN_UNARY_PREFIX_EXPRESSION) {
+      this.write(node.operator);
+      if (node.operator == "new") this.write(" ");
+      this.generateNode(node.value);
+    }
+    else if (kind == NN_UNARY_POSTFIX_EXPRESSION) {
+      this.generateNode(node.value);
+      this.write(node.operator);
+    }
+    else if (kind == NN_OBJECT_EXPRESSION) {
+      this.write("{");
+      let ii = 0;
+      while (ii < node.properties.length) {
+        let property = node.properties[ii];
+        this.generateNode(property.id);
+        this.write(": ");
+        this.generateNode(property.value);
+        if (ii + 1 < node.properties.length) {
+          this.write(", ");
+        }
+        ii++;
+      };
+      this.write(" }");
+    }
+    else if (kind == NN_ARRAY_EXPRESSION) {
+      this.write("[");
+      let ii = 0;
+      while (ii < node.elements.length) {
+        let element = node.elements[ii];
+        this.generateNode(element.value);
+        if (ii + 1 < node.elements.length) {
+          this.write(", ");
+        }
+        ii++;
+      };
+      this.write("]");
+    }
+    else if (kind == NN_LITERAL) {
+      this.write(node.value);
+    }
+    else if (kind == NN_STRING_LITERAL) {
+      let isChar = node.isChar;
+      if (isChar) this.write('"');
+      else this.write("'");
+      this.write(node.value);
+      if (isChar) this.write('"');
+      else this.write("'");
+    }
+    else if (kind == NN_INCLUDE) {
+      this.write(node.code);
     }
     else {
-      __imports.error("Cannot export " + node.node.kind);
+      __imports.error("Unknown node kind " + node.kind + "!");
     }
   }
-  else if (kind == NN_IF) {
-    if (node.condition) {
-      write("if (");
-      generateNode(node.condition);
-      write(")");
-    }
-    write(" { ");
-    generateBody(node.consequent);
-    write(" } ");
-    if (node.alternate) {
-      write("else ");
-      generateNode(node.alternate);
-    }
-  }
-  else if (kind == NN_RETURN) {
-    write("return (");
-    generateNode(node.argument);
-    write(")");
-  }
-  else if (kind == NN_WHILE) {
-    write("while ");
-    write("(");
-    generateNode(node.condition);
-    write(")");
-    write(" {");
-    generateBody(node.body);
-    write(" } ");
-  }
-  else if (kind == NN_BREAK) {
-    write("break");
-    write("");
-  }
-  else if (kind == NN_CONTINUE) {
-    write("continue");
-    write("");
-  }
-  else if (kind == NN_CALL_EXPRESSION) {
-    generateNode(node.callee);
-    write("(");
-    let ii = 0;
-    while (ii < node.parameter.length) {
-      generateNode(node.parameter[ii]);
-      if (ii + 1 < node.parameter.length) {
-        write(", ");
-      }
-      ii++;
-    };
-    write(")");
-  }
-  else if (kind == NN_BINARY_EXPRESSION) {
-    generateNode(node.left);
-    if (node.operator == "==") {
-      write(" === ");
-    }
-    else if (node.operator == "!=") {
-      write(" !== ");
-    }
-    else {
-      write(node.operator);
-    }
-    generateNode(node.right);
-  }
-  else if (kind == NN_MEMBER_EXPRESSION) {
-    generateNode(node.parent);
-    write(".");
-    generateNode(node.member);
-  }
-  else if (kind == NN_COMPUTED_MEMBER_EXPRESSION) {
-    generateNode(node.parent);
-    write("[");
-    generateNode(node.member);
-    write("]");
-  }
-  else if (kind == NN_UNARY_PREFIX_EXPRESSION) {
-    write(node.operator);
-    if (node.operator == "new") write(" ");
-    generateNode(node.value);
-  }
-  else if (kind == NN_UNARY_POSTFIX_EXPRESSION) {
-    generateNode(node.value);
-    write(node.operator);
-  }
-  else if (kind == NN_OBJECT_EXPRESSION) {
-    write("{");
-    let ii = 0;
-    while (ii < node.properties.length) {
-      let property = node.properties[ii];
-      generateNode(property.id);
-      write(": ");
-      generateNode(property.value);
-      if (ii + 1 < node.properties.length) {
-        write(", ");
-      }
-      ii++;
-    };
-    write(" }");
-  }
-  else if (kind == NN_ARRAY_EXPRESSION) {
-    write("[");
-    let ii = 0;
-    while (ii < node.elements.length) {
-      let element = node.elements[ii];
-      generateNode(element.value);
-      if (ii + 1 < node.elements.length) {
-        write(", ");
-      }
-      ii++;
-    };
-    write("]");
-  }
-  else if (kind == NN_LITERAL) {
-    write(node.value);
-  }
-  else if (kind == NN_STRING_LITERAL) {
-    let isChar = node.isChar;
-    if (isChar) write('"');
-    else write("'");
-    write(node.value);
-    if (isChar) write('"');
-    else write("'");
-  }
-  else {
-    __imports.error("Unknown node kind " + node.kind + "!");
-  }
-};
+
+}

@@ -1,532 +1,611 @@
-let pindex = 0;
-let scope = null;
-let tokens = null;
-let current = null;
+class Parser {
 
-function createNode(kind) {
-  let node = new Node(kind);
-  return (node);
-};
+  pindex: 0;
+  scope: null;
+  tokens: null;
+  current: null;
 
-function parse(tkns) {
-  let node = {
-    kind: NN_PROGRAM,
-    body: null
-  };
-  tokens = tkns;
-  pindex = -1;
-  next();
-  pushScope(node);
-  scope.parent = null;
-  scope.isGlobal = true;
-  node.body = parseStatementList();
-  popScope();
-  return (node);
-};
-
-function pushScope(node) {
-  let scp = new Scope();
-  scp.node = node;
-  scp.parent = scope;
-  node.context = scp;
-  scope = scp;
-};
-
-function popScope() {
-  if (scope != null) {
-    scope = scope.parent;
+  createNode(kind) {
+    let node = new Node(kind);
+    return (node);
   }
-};
 
-function parseStatementList() {
-  let list = [];
-  while (true) {
-    if (!current) break;
-    if (peek(PP_RBRACE)) break;
-    let node = parseStatement();
-    if (!node) break;
-    if (node.kind != NN_IGNORE) list.push(node);
-  };
-  return (list);
-};
+  include(path) {
+    let str = __imports.readFile(path);
+    let scanner = new Scanner();
+    let tokens = scanner.scan(str);
+    let parser = new Parser();
+    let ast = parser.parse(tokens);
+    let generator = new Generator();
+    let code = generator.generate(ast);
+    return (code);
+  }
 
-function parseStatement() {
-  let node = null;
-  if (peek(KK_LET)) {
-    node = parseVariableDeclaration(NN_LET);
-  } else if (peek(KK_CONST)) {
-    node = parseVariableDeclaration(NN_CONST);
-  } else if (peek(KK_CLASS)) {
-    node = parseClassDeclaration();
-  } else if (peek(KK_EXPORT)) {
-    node = parseExportDeclaration();
-  } else if (peek(KK_FUNCTION)) {
-    node = parseFunctionDeclaration(true);
-  } else if (peek(KK_RETURN)) {
-    node = parseReturnStatement();
-  } else if (peek(KK_IF)) {
-    node = parseIfStatement();
-  } else if (peek(KK_WHILE)) {
-    node = parseWhileStatement();
-  } else if (peek(KK_INCLUDE)) {
-    next();
-    include(current.value);
-    // ignore preprocessor nodes
-    node = { kind: NN_IGNORE };
-    next();
-  } else {
-    node = parseExpression();
-    if (node == null) {
-      __imports.error("Unknown node kind " + current.value + " in " + current.line + ":" + current.column);
+  isBinaryOperator(token) {
+    let kind = token.kind;
+    return (
+      (kind == OP_ASS ||
+      kind == OP_ADD ||
+      kind == OP_SUB ||
+      kind == OP_MUL ||
+      kind == OP_DIV ||
+      kind == OP_OR ||
+      kind == OP_AND ||
+      kind == OP_NOT ||
+      kind == OP_LT ||
+      kind == OP_LTE ||
+      kind == OP_GT ||
+      kind == OP_GTE ||
+      kind == OP_EQUAL ||
+      kind == OP_NEQUAL ||
+      kind == OP_BIN_OR ||
+      kind == OP_BIN_AND) &&
+      !this.isUnaryPrefixOperator(token)
+    );
+  }
+
+  isUnaryPrefixOperator(token) {
+    let kind = token.kind;
+    return (
+      kind == OP_NEW ||
+      kind == OP_NOT ||
+      kind == OP_ADD_ADD ||
+      kind == OP_SUB_SUB
+    );
+  }
+
+  isUnaryPostfixOperator(token) {
+    let kind = token.kind;
+    return (
+      kind == OP_ADD_ADD ||
+      kind == OP_SUB_SUB
+    );
+  }
+
+  isLiteral(token) {
+    let kind = token.kind;
+    return (
+      kind == TT_NULL ||
+      kind == TT_STRING ||
+      kind == TT_NUMBER ||
+      kind == TT_BOOLEAN ||
+      kind == TT_IDENTIFIER
+    );
+  }
+
+  parse(tokens) {
+    let node = {
+      kind: NN_PROGRAM,
+      body: null
+    };
+    this.tokens = tokens;
+    this.pindex = -1;
+    this.next();
+    this.pushScope(node);
+    this.scope.parent = null;
+    this.scope.isGlobal = true;
+    node.body = this.parseStatementList();
+    this.popScope();
+    return (node);
+  }
+
+  pushScope(node) {
+    let scp = new Scope();
+    scp.node = node;
+    scp.parent = this.scope;
+    node.context = scp;
+    this.scope = scp;
+  }
+
+  popScope() {
+    if (this.scope != null) {
+      this.scope = this.scope.parent;
     }
   }
-  eat(PP_SEMIC);
-  return (node);
-};
 
-function parseExportDeclaration() {
-  expect(KK_EXPORT);
-  let node = {
-    kind: NN_EXPORT,
-    node: parseStatement()
-  };
-  node.node.isExported = true;
-  return (node);
-};
+  parseStatementList() {
+    let list = [];
+    while (true) {
+      if (!this.current) break;
+      if (this.peek(PP_RBRACE)) break;
+      let node = this.parseStatement();
+      if (!node) break;
+      if (node.kind != NN_IGNORE) list.push(node);
+    };
+    return (list);
+  }
 
-function parseClassDeclaration() {
-  expect(KK_CLASS);
-  let node = {
-    kind: NN_CLASS,
-    id: current.value,
-    body: null
-  };
-  expect(TT_IDENTIFIER);
-  scope.register(node.id, node);
-  expect(PP_LBRACE);
-  pushScope(node);
-  node.body = parseClassBody();
-  popScope();
-  expect(PP_RBRACE);
-  return (node);
-};
-
-function parseClassBody() {
-  let list = [];
-  while (true) {
-    if (!current) break;
-    if (peek(PP_RBRACE)) break;
-    let node = parseClassBodyItem();
-    eat(PP_SEMIC);
-    if (!node) break;
-    list.push(node);
-  };
-  return (list);
-};
-
-function parseClassBodyItem() {
-  let id = current.value;
-  let node = null;
-  expect(TT_IDENTIFIER);
-  // method
-  if (peek(PP_LPAREN)) {
-    let kind = null;
-    // constructor?
-    if (id == "constructor") {
-      kind = NN_CLASS_CONSTRUCTOR;
+  parseStatement() {
+    let node = null;
+    if (this.peek(KK_LET)) {
+      node = this.parseVariableDeclaration(NN_LET);
+    } else if (this.peek(KK_CONST)) {
+      node = this.parseVariableDeclaration(NN_CONST);
+    } else if (this.peek(KK_CLASS)) {
+      node = this.parseClassDeclaration();
+    } else if (this.peek(KK_EXPORT)) {
+      node = this.parseExportDeclaration();
+    } else if (this.peek(KK_FUNCTION)) {
+      node = this.parseFunctionDeclaration(true);
+    } else if (this.peek(KK_RETURN)) {
+      node = this.parseReturnStatement();
+    } else if (this.peek(KK_IF)) {
+      node = this.parseIfStatement();
+    } else if (this.peek(KK_WHILE)) {
+      node = this.parseWhileStatement();
+    } else if (this.peek(KK_INCLUDE)) {
+      this.next();
+      let code = this.include(this.current.value);
+      // ignore preprocessor nodes
+      node = {
+        kind: NN_INCLUDE,
+        code: code
+      };
+      this.next();
     } else {
-      kind = NN_CLASS_METHOD;
+      node = this.parseExpression();
+      if (node == null) {
+        let current = this.current;
+        __imports.error("Unknown node kind " + current.value + " in " + current.line + ":" + current.column);
+      }
     }
-    node = {
-      id: id,
+    this.eat(PP_SEMIC);
+    return (node);
+  }
+
+  parseExportDeclaration() {
+    this.expect(KK_EXPORT);
+    let node = {
+      kind: NN_EXPORT,
+      node: this.parseStatement()
+    };
+    node.node.isExported = true;
+    return (node);
+  }
+
+  parseClassDeclaration() {
+    this.expect(KK_CLASS);
+    let node = {
+      kind: NN_CLASS,
+      id: this.current.value,
+      ctor: null,
+      body: null
+    };
+    this.expect(TT_IDENTIFIER);
+    this.scope.register(node.id, node);
+    this.expect(PP_LBRACE);
+    this.pushScope(node);
+    node.body = this.parseClassBody(node);
+    this.popScope();
+    this.expect(PP_RBRACE);
+    return (node);
+  }
+
+  parseClassBody(parent) {
+    let list = [];
+    while (true) {
+      if (!this.current) break;
+      if (this.peek(PP_RBRACE)) break;
+      let node = this.parseClassBodyItem();
+      this.eat(PP_SEMIC);
+      if (!node) break;
+      if (node.kind == NN_CLASS_CONSTRUCTOR) {
+        parent.ctor = node;
+      }
+      list.push(node);
+    };
+    return (list);
+  }
+
+  parseClassBodyItem() {
+    let id = this.current.value;
+    let node = null;
+    this.expect(TT_IDENTIFIER);
+    // method
+    if (this.peek(PP_LPAREN)) {
+      let kind = null;
+      // constructor?
+      if (id == "constructor") {
+        kind = NN_CLASS_CONSTRUCTOR;
+      } else {
+        kind = NN_CLASS_METHOD;
+      }
+      node = {
+        id: id,
+        kind: kind,
+        init: null
+      };
+      this.scope.register(node.id, node);
+      this.pushScope(node);
+      node.init = this.parseFunctionDeclaration(false);
+      this.popScope();
+    }
+    // property
+    else if (this.eat(PP_COLON)) {
+      node = {
+        id: id,
+        kind: NN_CLASS_PROPERTY,
+        init: this.parseExpression()
+      };
+      this.scope.register(node.id, node);
+    }
+    else __imports.error("Unexpected class token " + this.current.value);
+    return (node);
+  }
+
+  parseWhileStatement() {
+    let node = {
+      kind: NN_WHILE,
+      condition: null,
+      body: null
+    };
+    this.expect(KK_WHILE);
+    node.condition = this.parseExpression();
+    this.pushScope(node);
+    // braced body
+    if (this.eat(PP_LBRACE)) {
+      node.body = this.parseStatementList();
+      this.expect(PP_RBRACE);
+    // short body
+    } else {
+      node.body = this.parseExpression();
+    }
+    this.popScope();
+    return (node);
+  }
+
+  parseIfStatement() {
+    let node = {
+      kind: NN_IF,
+      condition: null,
+      alternate: null,
+      consequent: null
+    };
+    // else
+    if (!this.eat(KK_IF)) {
+      this.pushScope(node);
+      node.consequent = this.parseIfBody();
+      this.popScope();
+      return (node);
+    }
+    this.expect(PP_LPAREN);
+    node.condition = this.parseExpression();
+    this.expect(PP_RPAREN);
+    this.pushScope(node);
+    node.consequent = this.parseIfBody();
+    this.popScope();
+    if (this.eat(KK_ELSE)) {
+      node.alternate = this.parseIfStatement();
+    }
+    return (node);
+  }
+
+  parseIfBody() {
+    let node = null;
+    // braced if
+    if (this.eat(PP_LBRACE)) {
+      node = this.parseStatementList();
+      this.expect(PP_RBRACE);
+    // short if
+    } else {
+      node = [this.parseExpression()];
+      this.eat(PP_SEMIC);
+    }
+    return (node);
+  }
+
+  parseReturnStatement() {
+    this.expect(KK_RETURN);
+    let node = {
+      kind: NN_RETURN,
+      argument: this.parseExpression()
+    };
+    return (node);
+  }
+
+  parseFunctionDeclaration(strict) {
+    if (strict) this.expect(KK_FUNCTION);
+    let node = {
+      kind: NN_FUNCTION,
+      id: null,
+      parameter: null,
+      body: null
+    };
+    if (this.peek(TT_IDENTIFIER)) {
+      node.id = this.current.value;
+      this.scope.register(node.id, node);
+      this.next();
+    }
+    node.parameter = this.parseFunctionParameters();
+    this.pushScope(node);
+    if (this.eat(PP_LBRACE)) {
+      node.body = this.parseStatementList();
+      this.expect(PP_RBRACE);
+    }
+    this.popScope();
+    return (node);
+  }
+
+  parseFunctionParameters() {
+    let params = [];
+    this.expect(PP_LPAREN);
+    while (true) {
+      if (this.peek(PP_RPAREN)) break;
+      params.push(this.current);
+      this.next();
+      if (!this.eat(PP_COMMA)) break;
+    };
+    this.expect(PP_RPAREN);
+    return (params);
+  }
+
+  parseVariableDeclaration(kind) {
+    this.next();
+    this.expectIdentifier();
+    let node = {
       kind: kind,
+      id: this.current.value,
       init: null
     };
-    scope.register(node.id, node);
-    pushScope(node);
-    node.init = parseFunctionDeclaration(false);
-    popScope();
-  }
-  // property
-  else if (eat(PP_COLON)) {
-    node = {
-      id: id,
-      kind: NN_CLASS_PROPERTY,
-      init: parseExpression()
-    };
-    scope.register(node.id, node);
-  }
-  else __imports.error("Unexpected class token " + current.value);
-  return (node);
-};
-
-function parseWhileStatement() {
-  let node = {
-    kind: NN_WHILE,
-    condition: null,
-    body: null
-  };
-  expect(KK_WHILE);
-  node.condition = parseExpression();
-  pushScope(node);
-  // braced body
-  if (eat(PP_LBRACE)) {
-    node.body = parseStatementList();
-    expect(PP_RBRACE);
-  // short body
-  } else {
-    node.body = parseExpression();
-  }
-  popScope();
-  return (node);
-};
-
-function parseIfStatement() {
-  let node = {
-    kind: NN_IF,
-    condition: null,
-    alternate: null,
-    consequent: null
-  };
-  // else
-  if (!eat(KK_IF)) {
-    pushScope(node);
-    node.consequent = parseIfBody();
-    popScope();
+    this.next();
+    this.scope.register(node.id, node);
+    this.expect(OP_ASS);
+    node.init = this.parseExpression();
     return (node);
   }
-  expect(PP_LPAREN);
-  node.condition = parseExpression();
-  expect(PP_RPAREN);
-  pushScope(node);
-  node.consequent = parseIfBody();
-  popScope();
-  if (eat(KK_ELSE)) {
-    node.alternate = parseIfStatement();
+
+  parseMemberExpression(parent) {
+    this.expect(PP_DOT);
+    let node = {
+      kind: NN_MEMBER_EXPRESSION,
+      parent: parent,
+      member: this.parseExpression()
+    };
+    return (node);
   }
-  return (node);
-};
 
-function parseIfBody() {
-  let node = null;
-  // braced if
-  if (eat(PP_LBRACE)) {
-    node = parseStatementList();
-    expect(PP_RBRACE);
-  // short if
-  } else {
-    node = [parseExpression()];
-    eat(PP_SEMIC);
+  parseComputedMemberExpression(parent) {
+    this.expect(PP_LBRACK);
+    let node = {
+      kind: NN_COMPUTED_MEMBER_EXPRESSION,
+      parent: parent,
+      member: this.parseExpression()
+    };
+    this.expect(PP_RBRACK);
+    return (node);
   }
-  return (node);
-};
 
-function parseReturnStatement() {
-  expect(KK_RETURN);
-  let node = {
-    kind: NN_RETURN,
-    argument: parseExpression()
-  };
-  return (node);
-};
-
-function parseFunctionDeclaration(strict) {
-  if (strict) expect(KK_FUNCTION);
-  let node = {
-    kind: NN_FUNCTION,
-    id: null,
-    parameter: null,
-    body: null
-  };
-  if (peek(TT_IDENTIFIER)) {
-    node.id = current.value;
-    scope.register(node.id, node);
-    next();
+  parseCallExpression(id) {
+    let node = {
+      kind: NN_CALL_EXPRESSION,
+      callee: id,
+      parameter: this.parseCallParameters()
+    };
+    return (node);
   }
-  node.parameter = parseFunctionParameters();
-  pushScope(node);
-  if (eat(PP_LBRACE)) {
-    node.body = parseStatementList();
-    expect(PP_RBRACE);
+
+  parseCallParameters() {
+    let params = [];
+    this.expect(PP_LPAREN);
+    while (true) {
+      if (this.peek(PP_RPAREN)) break;
+      let expr = this.parseExpression();
+      params.push(expr);
+      if (!this.eat(PP_COMMA)) break;
+    };
+    this.expect(PP_RPAREN);
+    return (params);
   }
-  popScope();
-  return (node);
-};
 
-function parseFunctionParameters() {
-  let params = [];
-  expect(PP_LPAREN);
-  while (true) {
-    if (peek(PP_RPAREN)) break;
-    params.push(current);
-    next();
-    if (!eat(PP_COMMA)) break;
-  };
-  expect(PP_RPAREN);
-  return (params);
-};
+  parseBreak() {
+    this.expect(KK_BREAK);
+    let node = {
+      kind: NN_BREAK
+    };
+    return (node);
+  }
 
-function parseVariableDeclaration(kind) {
-  next();
-  expectIdentifier();
-  let node = {
-    kind: kind,
-    id: current.value,
-    init: null
-  };
-  next();
-  scope.register(node.id, node);
-  expect(OP_ASS);
-  node.init = parseExpression();
-  return (node);
-};
+  parseContinue() {
+    this.expect(KK_CONTINUE);
+    let node = {
+      kind: NN_CONTINUE
+    };
+    return (node);
+  }
 
-function parseMemberExpression(parent) {
-  expect(PP_DOT);
-  let node = {
-    kind: NN_MEMBER_EXPRESSION,
-    parent: parent,
-    member: parseExpression()
-  };
-  return (node);
-};
+  parseObjectExpression() {
+    let node = {
+      kind: NN_OBJECT_EXPRESSION,
+      properties: []
+    };
+    this.expect(PP_LBRACE);
+    while (true) {
+      if (this.peek(PP_RBRACE)) break;
+      let property = {
+        kind: NN_OBJECT_PROPERTY,
+        id: this.parseLiteral(),
+        value: null
+      };
+      this.expect(PP_COLON);
+      property.value = this.parseStatement();
+      node.properties.push(property);
+      if (!this.eat(PP_COMMA)) break;
+    };
+    this.expect(PP_RBRACE);
+    return (node);
+  }
 
-function parseComputedMemberExpression(parent) {
-  expect(PP_LBRACK);
-  let node = {
-    kind: NN_COMPUTED_MEMBER_EXPRESSION,
-    parent: parent,
-    member: parseExpression()
-  };
-  expect(PP_RBRACK);
-  return (node);
-};
+  parseArrayExpression() {
+    this.expect(PP_LBRACK);
+    let node = {
+      kind: NN_ARRAY_EXPRESSION,
+      elements: []
+    };
+    while (true) {
+      if (this.peek(PP_RBRACK)) break;
+      let element = {
+        kind: NN_ARRAY_ELEMENT,
+        value: this.parseExpression()
+      };
+      node.elements.push(element);
+      if (!this.eat(PP_COMMA)) break;
+    };
+    this.expect(PP_RBRACK);
+    return (node);
+  }
 
-function parseCallExpression(id) {
-  let node = {
-    kind: NN_CALL_EXPRESSION,
-    callee: id,
-    parameter: parseCallParameters()
-  };
-  return (node);
-};
-
-function parseCallParameters() {
-  let params = [];
-  expect(PP_LPAREN);
-  while (true) {
-    if (peek(PP_RPAREN)) break;
-    let expr = parseExpression();
-    params.push(expr);
-    if (!eat(PP_COMMA)) break;
-  };
-  expect(PP_RPAREN);
-  return (params);
-};
-
-function parseBreak() {
-  expect(KK_BREAK);
-  let node = {
-    kind: NN_BREAK
-  };
-  return (node);
-};
-
-function parseContinue() {
-  expect(KK_CONTINUE);
-  let node = {
-    kind: NN_CONTINUE
-  };
-  return (node);
-};
-
-function parseObjectExpression() {
-  let node = {
-    kind: NN_OBJECT_EXPRESSION,
-    properties: []
-  };
-  expect(PP_LBRACE);
-  while (true) {
-    if (peek(PP_RBRACE)) break;
-    let property = {
-      kind: NN_OBJECT_PROPERTY,
-      id: parseLiteral(),
+  parseUnaryPrefixExpression() {
+    let node = {
+      kind: NN_UNARY_PREFIX_EXPRESSION,
+      operator: this.current.value,
       value: null
     };
-    expect(PP_COLON);
-    property.value = parseStatement();
-    node.properties.push(property);
-    if (!eat(PP_COMMA)) break;
-  };
-  expect(PP_RBRACE);
-  return (node);
-};
-
-function parseArrayExpression() {
-  expect(PP_LBRACK);
-  let node = {
-    kind: NN_ARRAY_EXPRESSION,
-    elements: []
-  };
-  while (true) {
-    if (peek(PP_RBRACK)) break;
-    let element = {
-      kind: NN_ARRAY_ELEMENT,
-      value: parseExpression()
-    };
-    node.elements.push(element);
-    if (!eat(PP_COMMA)) break;
-  };
-  expect(PP_RBRACK);
-  return (node);
-};
-
-function parseUnaryPrefixExpression() {
-  let node = {
-    kind: NN_UNARY_PREFIX_EXPRESSION,
-    operator: current.value,
-    value: null
-  };
-  next();
-  node.value = parseExpression();
-  return (node);
-};
-
-function parseUnaryPostfixExpression(left) {
-  let node = {
-    kind: NN_UNARY_POSTFIX_EXPRESSION,
-    operator: current.value,
-    value: left
-  };
-  next();
-  return (node);
-};
-
-function parseBinaryExpression(left) {
-  let node = {
-    kind: NN_BINARY_EXPRESSION,
-    left: left,
-    right: null,
-    operator: current.value
-  };
-  next();
-  node.right = parseExpression();
-  return (node);
-};
-
-function parseInfix(left) {
-  if (isBinaryOperator(current)) {
-    return (parseBinaryExpression(left));
-  }
-  if (isUnaryPostfixOperator(current)) {
-    return (parseUnaryPostfixExpression(left));
-  }
-  if (peek(PP_LPAREN)) {
-    return (parseCallExpression(left));
-  }
-  if (peek(PP_DOT)) {
-    return (parseMemberExpression(left));
-  }
-  if (peek(PP_LBRACK)) {
-    return (parseComputedMemberExpression(left));
-  }
-  return (left);
-};
-
-function parsePrefix() {
-  if (isLiteral(current)) {
-    return (parseLiteral());
-  }
-  if (peek(PP_LBRACE)) {
-    return (parseObjectExpression());
-  }
-  if (peek(PP_LBRACK)) {
-    return (parseArrayExpression());
-  }
-  if (eat(PP_LPAREN)) {
-    let node = parseExpression();
-    expect(PP_RPAREN);
+    this.next();
+    node.value = this.parseExpression();
     return (node);
   }
-  if (isUnaryPrefixOperator(current)) {
-    return (parseUnaryPrefixExpression());
+
+  parseUnaryPostfixExpression(left) {
+    let node = {
+      kind: NN_UNARY_POSTFIX_EXPRESSION,
+      operator: this.current.value,
+      value: left
+    };
+    this.next();
+    return (node);
   }
-  return (parseStatement());
-};
 
-function parseExpression() {
-  if (peek(KK_BREAK)) {
-    return (parseBreak());
+  parseBinaryExpression(left) {
+    let node = {
+      kind: NN_BINARY_EXPRESSION,
+      left: left,
+      right: null,
+      operator: this.current.value
+    };
+    this.next();
+    node.right = this.parseExpression();
+    return (node);
   }
-  if (peek(KK_CONTINUE)) {
-    return (parseContinue());
+
+  parseInfix(left) {
+    if (this.isBinaryOperator(this.current)) {
+      return (this.parseBinaryExpression(left));
+    }
+    if (this.isUnaryPostfixOperator(this.current)) {
+      return (this.parseUnaryPostfixExpression(left));
+    }
+    if (this.peek(PP_LPAREN)) {
+      return (this.parseCallExpression(left));
+    }
+    if (this.peek(PP_DOT)) {
+      return (this.parseMemberExpression(left));
+    }
+    if (this.peek(PP_LBRACK)) {
+      return (this.parseComputedMemberExpression(left));
+    }
+    return (left);
   }
-  let node = parsePrefix();
-  while (true) {
-    if (!current) break;
-    let expr = parseInfix(node);
-    if (expr == null || expr == node) break;
-    node = expr;
-  };
-  return (node);
-};
 
-function parseLiteral() {
-  if (peek(TT_STRING)) {
-    return (parseStringLiteral());
+  parsePrefix() {
+    if (this.isLiteral(this.current)) {
+      return (this.parseLiteral());
+    }
+    if (this.peek(PP_LBRACE)) {
+      return (this.parseObjectExpression());
+    }
+    if (this.peek(PP_LBRACK)) {
+      return (this.parseArrayExpression());
+    }
+    if (this.eat(PP_LPAREN)) {
+      let node = this.parseExpression();
+      this.expect(PP_RPAREN);
+      return (node);
+    }
+    if (this.isUnaryPrefixOperator(this.current)) {
+      return (this.parseUnaryPrefixExpression());
+    }
+    return (this.parseStatement());
   }
-  let node = {
-    kind: NN_LITERAL,
-    type: current.kind,
-    value: current.value
-  };
-  next();
-  return (node);
-};
 
-function parseStringLiteral() {
-  let node = {
-    kind: NN_STRING_LITERAL,
-    type: current.kind,
-    value: current.value,
-    isChar: current.isChar
-  };
-  next();
-  return (node);
-};
-
-function expectIdentifier() {
-  if (current.kind != TT_IDENTIFIER) {
-    __imports.error("Expected " + TT_IDENTIFIER + ":identifier but got " + current.kind + ":" + current.value);
+  parseExpression() {
+    if (this.peek(KK_BREAK)) {
+      return (this.parseBreak());
+    }
+    if (this.peek(KK_CONTINUE)) {
+      return (this.parseContinue());
+    }
+    let node = this.parsePrefix();
+    while (true) {
+      if (!this.current) break;
+      let expr = this.parseInfix(node);
+      if (expr == null || expr == node) break;
+      node = expr;
+    };
+    return (node);
   }
-};
 
-function peek(kind) {
-  return (current && current.kind == kind);
-};
-
-function next() {
-  pindex++;
-  current = tokens[pindex];
-};
-
-function back() {
-  pindex = pindex - 2;
-  next();
-};
-
-function expect(kind) {
-  if (current.kind != kind) {
-    __imports.error("Expected " + kind + " but got " + current.kind + " in " + current.line + ":" + current.column);
-  } else {
-    next();
+  parseLiteral() {
+    if (this.peek(TT_STRING)) {
+      return (this.parseStringLiteral());
+    }
+    let current = this.current;
+    let node = {
+      kind: NN_LITERAL,
+      type: current.kind,
+      value: current.value
+    };
+    this.next();
+    return (node);
   }
-};
 
-function eat(kind) {
-  if (peek(kind)) {
-    next();
-    return (true);
+  parseStringLiteral() {
+    let current = this.current;
+    let node = {
+      kind: NN_STRING_LITERAL,
+      type: current.kind,
+      value: current.value,
+      isChar: current.isChar
+    };
+    this.next();
+    return (node);
   }
-  return (false);
+
+  expectIdentifier() {
+    let current = this.current;
+    if (current.kind != TT_IDENTIFIER) {
+      __imports.error("Expected " + TT_IDENTIFIER + ":identifier but got " + current.kind + ":" + current.value);
+    }
+  }
+
+  peek(kind) {
+    return (this.current && this.current.kind == kind);
+  }
+
+  next() {
+    this.pindex++;
+    this.current = this.tokens[this.pindex];
+  }
+
+  back() {
+    this.pindex = this.pindex - 2;
+    this.next();
+  }
+
+  expect(kind) {
+    let current = this.current;
+    if (current.kind != kind) {
+      __imports.error("Expected " + kind + " but got " + current.kind + " in " + current.line + ":" + current.column);
+    } else {
+      this.next();
+    }
+  }
+
+  eat(kind) {
+    if (this.peek(kind)) {
+      this.next();
+      return (true);
+    }
+    return (false);
+  }
+
 };

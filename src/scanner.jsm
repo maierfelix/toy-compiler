@@ -1,231 +1,261 @@
-function scan(str) {
+class Scanner {
+  ii: 0;
+  line: 0;
+  column: 0;
+  next() {
+    this.ii++;
+    this.column++;
+  }
+  isBlank(cc) {
+    return (
+      cc == 9 ||
+      cc == 11 ||
+      cc == 12 ||
+      cc == 32 ||
+      cc == 160
+    );
+  }
+  isQuote(cc) {
+    return (
+      cc == 39 ||
+      cc == 34
+    );
+  }
+  isAlpha(cc) {
+    return (
+      cc >= 65 && cc <= 90 ||
+      cc >= 97 && cc <= 122 ||
+      cc == 95 || cc == 35
+    );
+  }
+  isNumber(cc) {
+    return (
+      cc >= 48 && cc <= 57
+    );
+  }
+  scan(str) {
 
-  let ii = -1;
-  let line = 1;
-  let column = 0;
-  let length = str.length;
+    this.ii = -1;
+    this.line = 1;
+    this.column = 0;
 
-  let tokens = [];
+    let tokens = [];
+    let length = str.length;
 
-  function next() {
-    ii++;
-    column++;
-  };
-
-  while (true) {
-    next();
-    let ch = str.charAt(ii);
-    let cc = str.charCodeAt(ii);
-    // blank
-    if (isBlank(cc)) {
-      continue;
-    }
-    if (cc == 10) {
-      line++;
-      column = 0;
-      continue;
-    }
-    // alpha
-    if (isAlpha(cc)) {
-      let start = ii;
-      while (true) {
-        if (!isAlpha(cc)) {
-          ii--;
-          column--;
-          break;
-        }
-        next();
-        cc = str.charCodeAt(ii);
-      };
-      let content = str.slice(start, ii+1);
-      processToken(tokens, content, line, column);
-      continue;
-    }
-    // number
-    if (isNumber(cc) || cc == 45 && isNumber(str.charCodeAt(ii+1))) {
-      let start = ii;
-      while (true) {
-        if (!isNumber(cc) && cc != 45) {
-          ii--;
-          column--;
-          break;
-        }
-        next();
-        cc = str.charCodeAt(ii);
-      };
-      let content = str.slice(start, ii+1);
-      let token = createToken(TT_NUMBER, content, line, column);
-      tokens.push(token);
-      continue;
-    }
-    // string
-    if (isQuote(cc)) {
-      let start = ii;
-      let begin = cc;
-      while (true) {
-        next();
-        cc = str.charCodeAt(ii);
-        // break on next matching quote
-        if (isQuote(cc) && cc == begin) {
-          break;
-        }
-      };
-      let content = str.slice(start+1, ii);
-      let token = createToken(TT_STRING, content, line, column);
-      token.isChar = content[0] == "'";
-      tokens.push(token);
-      continue;
-    }
-    if (ch == "/") {
-      // single line
-      if (str.charAt(ii + 1) == "/") {
+    while (true) {
+      this.next();
+      let ch = str.charAt(this.ii);
+      let cc = str.charCodeAt(this.ii);
+      // blank
+      if (this.isBlank(cc)) {
+        continue;
+      }
+      if (cc == 10) {
+        this.line++;
+        this.column = 0;
+        continue;
+      }
+      // alpha
+      if (this.isAlpha(cc)) {
+        let start = this.ii;
         while (true) {
-          if (cc == 10) {
-            column = 0;
-            line++;
+          if (!this.isAlpha(cc)) {
+            this.ii--;
+            this.column--;
             break;
           }
-          next();
-          cc = str.charCodeAt(ii);
+          this.next();
+          cc = str.charCodeAt(this.ii);
         };
+        let content = str.slice(start, this.ii+1);
+        processToken(tokens, content, this.line, this.column);
+        continue;
       }
-      // multi line
-      else if (str.charAt(ii + 1) == "*") {
+      // number
+      if (this.isNumber(cc) || cc == 45 && this.isNumber(str.charCodeAt(this.ii+1))) {
+        let start = this.ii;
         while (true) {
-          // handle line breaks, but dont break on them
-          if (cc == 10) {
-            column = 0;
-            line++;
+          if (!this.isNumber(cc) && cc != 45) {
+            this.ii--;
+            this.column--;
+            break;
           }
-          // comment end
-          else if (cc == 42) {
-            if (str.charCodeAt(ii + 1) == 47) break;
-          }
-          next();
-          cc = str.charCodeAt(ii);
+          this.next();
+          cc = str.charCodeAt(this.ii);
         };
+        let content = str.slice(start, this.ii+1);
+        let token = createToken(TT_NUMBER, content, this.line, this.column);
+        tokens.push(token);
+        continue;
       }
-      continue;
-    }
-    if (
-      ch == "(" ||
-      ch == ")" ||
-      ch == "[" ||
-      ch == "]" ||
-      ch == "{" ||
-      ch == "}" ||
-      ch == "." ||
-      ch == ":" ||
-      ch == "," ||
-      ch == ";" ||
-      ch == "*" ||
-      ch == "/"
-    ) {
-      let content = str.slice(ii, ii+1);
-      processToken(tokens, content, line, column);
-      continue;
-    }
-    if (
-      ch == "+" ||
-      ch == "-" ||
-      ch == "!" ||
-      ch == "=" ||
-      ch == "|" ||
-      ch == "&" ||
-      ch == ">" ||
-      ch == "<"
-    ) {
-      let second = str.slice(ii+1, ii+2);
-      // + # ++
-      if (ch == "+") {
-        if (ch + second == "++") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+      // string
+      if (this.isQuote(cc)) {
+        let start = this.ii;
+        let begin = cc;
+        while (true) {
+          this.next();
+          cc = str.charCodeAt(this.ii);
+          // break on next matching quote
+          if (this.isQuote(cc) && cc == begin) {
+            break;
+          }
+        };
+        let content = str.slice(start+1, this.ii);
+        let token = createToken(TT_STRING, content, this.line, this.column);
+        token.isChar = content[0] == "'";
+        tokens.push(token);
+        continue;
+      }
+      if (ch == "/") {
+        // single line
+        if (str.charAt(this.ii + 1) == "/") {
+          while (true) {
+            if (cc == 10) {
+              this.column = 0;
+              this.line++;
+              break;
+            }
+            this.next();
+            cc = str.charCodeAt(this.ii);
+          };
         }
-      }
-      // - # --
-      else if (ch == "-") {
-        if (ch + second == "--") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+        // multi line
+        else if (str.charAt(this.ii + 1) == "*") {
+          while (true) {
+            // handle line breaks, but dont break on them
+            if (cc == 10) {
+              this.column = 0;
+              this.line++;
+            }
+            // comment end
+            else if (cc == 42) {
+              if (str.charCodeAt(this.ii + 1) == 47) break;
+            }
+            this.next();
+            cc = str.charCodeAt(this.ii);
+          };
         }
+        continue;
       }
-      // ! # !=
-      else if (ch == "!") {
-        if (ch + second == "!=") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+      if (
+        ch == "(" ||
+        ch == ")" ||
+        ch == "[" ||
+        ch == "]" ||
+        ch == "{" ||
+        ch == "}" ||
+        ch == "." ||
+        ch == ":" ||
+        ch == "," ||
+        ch == ";" ||
+        ch == "*" ||
+        ch == "/"
+      ) {
+        let content = str.slice(this.ii, this.ii+1);
+        processToken(tokens, content, this.line, this.column);
+        continue;
+      }
+      if (
+        ch == "+" ||
+        ch == "-" ||
+        ch == "!" ||
+        ch == "=" ||
+        ch == "|" ||
+        ch == "&" ||
+        ch == ">" ||
+        ch == "<"
+      ) {
+        let second = str.slice(this.ii+1, this.ii+2);
+        // + # ++
+        if (ch == "+") {
+          if (ch + second == "++") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
         }
-      }
-      // = # ==
-      else if (ch == "=") {
-        if (ch + second == "==") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+        // - # --
+        else if (ch == "-") {
+          if (ch + second == "--") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
         }
-      }
-      // | # ||
-      else if (ch == "|") {
-        if (ch + second == "||") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+        // ! # !=
+        else if (ch == "!") {
+          if (ch + second == "!=") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
         }
-      }
-      // | # ||
-      else if (ch == "|") {
-        if (ch + second == "||") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+        // = # ==
+        else if (ch == "=") {
+          if (ch + second == "==") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
         }
-      }
-      // & # &&
-      else if (ch == "&") {
-        if (ch + second == "&&") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+        // | # ||
+        else if (ch == "|") {
+          if (ch + second == "||") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
         }
-      }
-      // > # >=
-      else if (ch == ">") {
-        if (ch + second == ">=") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+        // | # ||
+        else if (ch == "|") {
+          if (ch + second == "||") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
         }
-      }
-      // < # <=
-      else if (ch == "<") {
-        if (ch + second == "<=") {
-          next();
-          processToken(tokens, ch + second, line, column);
-        } else {
-          processToken(tokens, ch, line, column);
+        // & # &&
+        else if (ch == "&") {
+          if (ch + second == "&&") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
         }
+        // > # >=
+        else if (ch == ">") {
+          if (ch + second == ">=") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
+        }
+        // < # <=
+        else if (ch == "<") {
+          if (ch + second == "<=") {
+            this.next();
+            processToken(tokens, ch + second, this.line, this.column);
+          } else {
+            processToken(tokens, ch, this.line, this.column);
+          }
+        }
+        continue;
       }
-      continue;
-    }
 
-    if (ii >= length) {
-      break;
-    }
+      if (this.ii >= length) {
+        break;
+      }
 
-  };
-
-  return (tokens);
+    };
+    return (tokens);
+  }
 
 };
